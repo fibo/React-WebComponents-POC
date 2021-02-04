@@ -1,5 +1,18 @@
+import { useCallback, useEffect, useRef, useState } from 'react'
+
+const selectCellEventName = 'selecttictactoecell'
+const selectedByPlayerAttributeName = 'selectedbyplayer'
+const nextPlayerAttributeName = 'nextplayer'
+const player1 = 'player1'
+const player2 = 'player2'
+
 export class TicTacToeElement extends HTMLElement {
   static elementName = 'tic-tac-toe'
+
+  static selectedByPlayerAttributeName = selectedByPlayerAttributeName
+  static selectCellEventName = selectCellEventName
+  static player1 = player1
+  static player2 = player2
 
   constructor () {
     super()
@@ -26,33 +39,131 @@ export class TicTacToeElement extends HTMLElement {
       :host div:hover {
         background-color: azure;
       }
-      :host div[selected] {
-        background-color: azure;
+      :host div[${selectedByPlayerAttributeName}=${player1}] {
+        background-color: pink;
+      }
+      :host div[${selectedByPlayerAttributeName}=${player2}] {
+        background-color: darkseagreen;
       }
     `
-
     shadow.appendChild(style)
 
-    for (let i = 0; i < 9; i++) {
+    for (let cellIndex = 0; cellIndex < 9; cellIndex++) {
       const div = document.createElement('div')
 
       div.addEventListener('pointerdown', (event) => {
-        const { target } = event
+        event.stopPropagation()
 
-        if (target.hasAttribute('selected')) {
-          target.removeAttribute('selected')
+        const { target } = event
+        const { nextPlayer } = this
+
+        const wasSelected = target.hasAttribute(selectedByPlayerAttributeName)
+
+        if (wasSelected) {
+          // Do not select twice.
         } else {
-          target.setAttribute('selected', '')
+          const selectTicTacToeCellEvent = new CustomEvent(
+            selectCellEventName, {
+              detail: {
+                cellIndex,
+                isSelected: !wasSelected,
+                nextPlayer: player1
+              }
+            }
+          )
+
+          this.dispatchEvent(selectTicTacToeCellEvent)
+
+          target.setAttribute(selectedByPlayerAttributeName, nextPlayer)
+          this.toggleNextPlayer()
         }
       })
+
       shadow.appendChild(div)
+    }
+
+    this.resetBoard()
+  }
+
+  get nextPlayer () {
+    return this.getAttribute(nextPlayerAttributeName)
+  }
+
+  resetBoard () {
+    this.setAttribute(nextPlayerAttributeName, player1)
+  }
+
+  toggleNextPlayer () {
+    const { nextPlayer } = this
+
+    switch (nextPlayer) {
+      case player1: {
+        this.setAttribute(nextPlayerAttributeName, player2)
+        break
+      }
+      case player2: {
+        this.setAttribute(nextPlayerAttributeName, player1)
+        break
+      }
+      default: break
     }
   }
 }
 
+const emptyCell = 'emptyCell'
+const emptyCells = () => new Array(9).fill(emptyCell)
+
 export function TicTacToe () {
+  const ref = useRef()
+
+  const [cellsSelection, setCellsSelection] = useState(emptyCells())
+
+  const handleSelectCellEvent = useCallback((event) => {
+    const {
+      cellIndex,
+      isSelected,
+      nextPlayer
+    } = event.detail
+
+    if (isSelected) {
+      setCellsSelection((cellsSelection) => cellsSelection.map(
+        (cellSelection, i) => {
+          if (i === cellIndex) {
+            return nextPlayer
+          } else {
+            return cellSelection
+          }
+        }
+      ))
+    }
+  }, [])
+
+  useEffect(() => {
+    const element = ref.current
+
+    if (element) {
+      element.addEventListener(selectCellEventName, handleSelectCellEvent)
+    }
+
+    return () => {
+      if (element) {
+        element.removeEventListener(selectCellEventName, handleSelectCellEvent)
+      }
+    }
+  }, [ref])
+
+  useEffect(() => {
+    const allCellsAreSelected = cellsSelection.every((cellSelection) => cellSelection !== emptyCell)
+
+    if (allCellsAreSelected) {
+      setCellsSelection(emptyCells())
+    }
+  }, [cellsSelection])
+
   return (
-    <tic-tac-toe />
+    <tic-tac-toe
+      ref={ref}
+    />
   )
 }
 
